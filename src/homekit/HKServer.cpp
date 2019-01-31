@@ -60,6 +60,7 @@ void HKServer::handle() {
     while (result = socket_receive(s, buffer + total, size - total, 0) > 0)   {
       total += result;
     }
+    
     if(result < 0) {
       //error or closed
       Serial.println("Client disconnected.");
@@ -76,6 +77,7 @@ void HKServer::handle() {
       Serial.println("Client disconnected.");
       clients.erase(clients.begin() + i);
     }
+    Serial.printf("socket_active_status: %d\n", socket_active_status(s));
 
     i--;
   }
