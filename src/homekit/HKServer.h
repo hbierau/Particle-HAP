@@ -21,7 +21,7 @@ private:
   HKBonjour bonjour;
   UDP udp;
   bool paired = false;
-  std::vector<int> clients;
+  std::vector<HKConnection*> clients;
 public:
   HKPersistor *persistor;
   HKServer();

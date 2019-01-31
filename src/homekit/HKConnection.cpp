@@ -11,10 +11,32 @@ void generateAccessoryKey(ed25519_key *key) {
   print_hex_memory(key,sizeof(ed25519_key));
 }
 
-HKConnection::HKConnection(HKServer *s,TCPClient c) {
-  client =  c;
+HKConnection::HKConnection(HKServer *s,int socket) {
+  socket_client =  socket;
   server = s;
   //generateAccessoryKey(&accessoryKey);
+}
+
+int HKConnection::socketRead(uint8_t* buffer,size_t *buffer_size){
+  int total = 0;
+  int result = 0;
+  socklen_t size = (socklen_t)buffer_size;
+
+  while ((result = socket_receive(socket_client, buffer + total, size - total, 0)) > 0)   {
+    total += result;
+  }
+  delay(10);
+  if(!isConnected()) {
+    Serial.println("socketRead: read some bytes from closed socket !!!");
+    *buffer_size = 0;
+  }
+  *buffer_size = total;
+}
+
+int HKConnection::socketWrite(uint8_t* buffer,size_t size){
+  if(isConnected()) {
+    socket_send(socket_client,buffer, size);
+  }
 }
 
 void HKConnection::writeEncryptedData(uint8_t* payload,size_t size) {
@@ -52,7 +74,6 @@ void HKConnection::writeEncryptedData(uint8_t* payload,size_t size) {
       );
       if (r) {
           Serial.printf("Failed to chacha encrypt payload (code %d)\n", r);
-          client.stop();
           return;
       }
       payload_offset += chunk_size;
@@ -61,9 +82,7 @@ void HKConnection::writeEncryptedData(uint8_t* payload,size_t size) {
       part++;
   }
 
-  if(client.status()){
-    client.write(outputBuffer,output_offset);
-  }
+  socketWrite(outputBuffer,output_offset);
   Serial.println("END: writeEncryptedData");
 }
 
@@ -113,7 +132,6 @@ void HKConnection::decryptData(uint8_t* payload,size_t *size) {
       if (r) {
           Serial.printf("Failed to chacha decrypt payload (code %d)\n", r);
           //Once session security has been established, if the accessory encounters a decryption failure then it must immediately close the connection used for the session.
-          client.stop();
           *size = 0;
           return;
       }
@@ -129,54 +147,30 @@ void HKConnection::decryptData(uint8_t* payload,size_t *size) {
 }
 
 void HKConnection::readData(uint8_t* buffer,size_t *size) {
-  Serial.println("BEGIN: readData");
-  int total = 0;
-  int tempBufferSize = 4096;
-  uint8_t *tempBuffer =(uint8_t *) malloc(tempBufferSize * sizeof(uint8_t));
-  while(client.available()) {
-    int len = client.read(tempBuffer,tempBufferSize);
-    memcpy((buffer+total), tempBuffer,len);
-    total += len;
-    //delay(500);
+  socketRead(buffer,size);
+
+  if(*size > 0){
+    if(isEncrypted) {
+      decryptData(buffer,size);
+    }
   }
-
-  *size = total;
-
-  if(isEncrypted) {
-    decryptData(buffer,size);
-  }
-
-  free(tempBuffer);
-  Serial.println("END: readData");
 }
 
 void HKConnection::writeData(uint8_t* responseBuffer,size_t responseLen) {
   Serial.println("BEGIN: writeData");
   Serial.printf("writeData responseLen = %d\n", responseLen);
-  if(client.status() && client.connected()){
-    if(isEncrypted) {
-      writeEncryptedData((uint8_t *)responseBuffer,responseLen);
-    } else {
-      if(client.status()){
-        client.write((uint8_t *)responseBuffer, (size_t)responseLen);
-      }
-
-    }
+  if(isEncrypted) {
+    writeEncryptedData((uint8_t *)responseBuffer,responseLen);
+  } else {
+    socketWrite((uint8_t *)responseBuffer, (size_t)responseLen);
   }
   Serial.println("END: writeData");
 }
 
 
 void HKConnection::handleConnection() {
-  /*if (!isConnected()) {
+  if (!isConnected()) {
       return;
-  }*/
-
-  if(!client.available()) {
-    if(isEncrypted){
-      keepAlive();
-    }
-    return;
   }
 
   int input_buffer_size = 4096;
@@ -185,8 +179,7 @@ void HKConnection::handleConnection() {
   size_t len = 0;
 
   readData(inputBuffer,&len);
-  Serial.printf("Request Message read length: %d \n", len);
-  if (len > 0) {
+  while (len > 0) {
       lastKeepAliveMs = millis();
       HKNetworkMessage msg((const char *)inputBuffer);
       if (!strcmp(msg.directory, "pair-setup")){
@@ -201,14 +194,17 @@ void HKConnection::handleConnection() {
           isEncrypted = true;
         }
       } else if (!strcmp(msg.directory, "identify")){
-        client.stop();
+        //client.stop();
       } else if(isEncrypted) { //connection is secured
         Serial.printf("Handling message request: %s\n",msg.directory);
         handleAccessoryRequest((const char *)inputBuffer, len);
         Serial.printf("AFTER ACCESSORY MEM: %d\n",System.freeMemory() );
 
       }
+
+      readData(inputBuffer,&len);
   }
+  keepAlive();
   free(inputBuffer);
 }
 
@@ -228,18 +224,16 @@ void HKConnection::announce(char* desc){
 void HKConnection::keepAlive() {
   if((millis() - lastKeepAliveMs) > 2000) {
       lastKeepAliveMs = millis();
-      if(client.status()) {
-        if(isEncrypted && readsCount > 0) {
-          Serial.printf("Keeping alive..\n");
-          processNotifiableCharacteristics();
-
-          char *aliveMsg = new char[32];
-          memset(aliveMsg,0,32);
-          strncpy(aliveMsg, "{\"characteristics\": []}", 32);
-          announce(aliveMsg);
-          free(aliveMsg);
-
-        }
+      if(isEncrypted && readsCount > 0) {
+        Serial.printf("Keeping alive..\n");
+        //processNotifiableCharacteristics();
+/*
+        char *aliveMsg = new char[32];
+        memset(aliveMsg,0,32);
+        strncpy(aliveMsg, "{\"characteristics\": []}", 32);
+        announce(aliveMsg);
+        free(aliveMsg);
+*/
       }
   }
 }

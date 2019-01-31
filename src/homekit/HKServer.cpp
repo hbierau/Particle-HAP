@@ -1,6 +1,9 @@
 #include "HKServer.h"
 #include "HKConnection.h"
 
+#include "wwd_buffer.h"
+#include "wiced_tcpip.h"
+
 using namespace spark;
 
 HKServer::HKServer() {
@@ -10,9 +13,9 @@ HKServer::HKServer() {
 void HKServer::setup () {
   persistor->loadRecordStorage();
 
-  //bonjour.setUDP( &udp );
-  //bonjour.begin(deviceName);
-  //setPaired(false);
+  bonjour.setUDP( &udp );
+  bonjour.begin(deviceName);
+  setPaired(false);
 }
 
 void HKServer::setPaired(bool p) {
@@ -25,10 +28,12 @@ void HKServer::setPaired(bool p) {
   Serial.printf("Bonjour paired %d, r: %d\n", paired,r);
 }
 
+
 TCPClient client;
 HKConnection *connection = NULL;
 void HKServer::handle() {
-  //bonjour.run();
+  wiced_result_t r;
+  bonjour.run();
 
   if (!socket_handle_valid(server_socket_handle)) {
       server_socket_handle = socket_create_tcp_server(TCP_SERVER_PORT, _nif);
@@ -44,10 +49,11 @@ void HKServer::handle() {
     if (socket_handle_valid(client_socket))
     {
       Serial.println("Client connected.");
-      clients.push_back(client_socket);
+      //clients.push_back(client_socket);
+      clients.push_back(new HKConnection(this,client_socket));
     }
   }
-
+  /*
   int i = clients.size() - 1;
   while(i >= 0) {
     int s = clients.at(i);
@@ -57,59 +63,33 @@ void HKServer::handle() {
     int total = 0;
     int result = 0;
 
-    while (result = socket_receive(s, buffer + total, size - total, 0) > 0)   {
+    while ((result = socket_receive(s, buffer + total, size - total, 0)) > 0)   {
       total += result;
     }
-    
-    if(result < 0) {
-      //error or closed
+    delay(10);
+    if(socket_active_status(s) == SOCKET_STATUS_INACTIVE) {
       Serial.println("Client disconnected.");
       clients.erase(clients.begin() + i);
-    }
-    if(total > 0) {
+    } else if(total > 0) {
       Serial.printf("Read from socket %d count %d\n", s, total);
       Serial.printf("%s\n", buffer);
 
       socket_send(s,buffer, total);
     }
-    if(!socket_handle_valid(s)) {
-      Serial.printf("Socket not valid %d\n", s);
-      Serial.println("Client disconnected.");
-      clients.erase(clients.begin() + i);
-    }
-    Serial.printf("socket_active_status: %d\n", socket_active_status(s));
 
     i--;
-  }
-  //Serial.println(WiFi.localIP());
+  }*/
 
-/*
-  if(!connection) {
-    TCPClient newClient = server.available();
-    if(newClient) {
-      Serial.println("Client connected.");
-      //clients.insert(clients.begin(),new HKConnection(this,newClient));
-      connection = new HKConnection(this,newClient);
-    }
 
-  }
-  if(connection) {
-    if(connection->isConnected()) {
-      connection->handleConnection();
-    } else {
-      //connection.close();
-      free(connection);
-      connection = NULL;
-    }
-  }
-*/
-  /*
   int i = clients.size() - 1;
   while(i >= 0) {
     HKConnection *conn = clients.at(i);
 
-    conn->handleConnection();
-    if(!conn->isConnected()) {
+    if(conn->isConnected())
+    {
+      conn->handleConnection();
+    }
+    else {
       conn->close();
       Serial.println("Client removed.");
       clients.erase(clients.begin() + i);
@@ -117,7 +97,7 @@ void HKServer::handle() {
 
     i--;
   }
-  */
+
 
 
 }
