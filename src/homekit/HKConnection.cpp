@@ -21,7 +21,6 @@ int HKConnection::socketRead(uint8_t* buffer,size_t *buffer_size){
   int total = 0;
   int result = 0;
   socklen_t size = (socklen_t)buffer_size;
-
   while ((result = socket_receive(socket_client, buffer + total, size - total, 0)) > 0)   {
     total += result;
   }
@@ -31,11 +30,13 @@ int HKConnection::socketRead(uint8_t* buffer,size_t *buffer_size){
     *buffer_size = 0;
   }
   *buffer_size = total;
+
 }
 
 int HKConnection::socketWrite(uint8_t* buffer,size_t size){
   if(isConnected()) {
-    socket_send(socket_client,buffer, size);
+    sock_result_t r = socket_send(socket_client,buffer, size);
+    Serial.printf("socketWrite result: %lu\n", r);
   }
 }
 
@@ -49,6 +50,7 @@ void HKConnection::writeEncryptedData(uint8_t* payload,size_t size) {
   int output_offset = 0;
   int payload_offset = 0;
   int part = 0;
+
   while (payload_offset < size) {
 
       size_t chunk_size = size - payload_offset;
@@ -76,9 +78,10 @@ void HKConnection::writeEncryptedData(uint8_t* payload,size_t size) {
           Serial.printf("Failed to chacha encrypt payload (code %d)\n", r);
           return;
       }
+
       payload_offset += chunk_size;
       output_offset += chunk_size + 16 + 2;
-
+      Serial.printf("Data encrypted chunk_size: %d,payload size: %d,output_offset: %d,part: %d, readKeyCount: %d \n", chunk_size,size, output_offset, part,readsCount);
       part++;
   }
 
@@ -204,8 +207,9 @@ void HKConnection::handleConnection() {
 
       readData(inputBuffer,&len);
   }
-  keepAlive();
   free(inputBuffer);
+
+  processPostedCharacteristics();
 }
 
 void HKConnection::announce(char* desc){
@@ -213,9 +217,9 @@ void HKConnection::announce(char* desc){
   memset(reply,0,4096);
   int len = snprintf(reply, 4096, "EVENT/1.0 200 OK\r\nContent-Type: application/hap+json\r\nContent-Length: %lu\r\n\r\n%s", strlen(desc), desc);
 
-  Serial.println("--------BEGIN ANNOUNCE--------");
+  Serial.printf("--------BEGIN ANNOUNCE %d--------\n",socket_client);
   Serial.printf("%s\n",reply);
-  Serial.println("--------END ANNOUNCE--------");
+  Serial.printf("--------END ANNOUNCE: %d--------\n",socket_client);
 
   writeData((byte*)reply,len);
   free(reply);
@@ -226,14 +230,14 @@ void HKConnection::keepAlive() {
       lastKeepAliveMs = millis();
       if(isEncrypted && readsCount > 0) {
         Serial.printf("Keeping alive..\n");
-        //processNotifiableCharacteristics();
-/*
+
+        /*
         char *aliveMsg = new char[32];
         memset(aliveMsg,0,32);
         strncpy(aliveMsg, "{\"characteristics\": []}", 32);
         announce(aliveMsg);
-        free(aliveMsg);
-*/
+        free(aliveMsg);*/
+
       }
   }
 }
@@ -570,6 +574,7 @@ void HKConnection::handlePairSetup(const char *buffer) {
             size_t controllerSignatureSize = subTLV8->lengthForIndex(10);
             char controllerHash[100];
 
+            server->persistor->resetPersistor();
             HKKeyRecord newRecord;
             memcpy(newRecord.controllerID,controllerIdentifier, 36);
             memcpy(newRecord.publicKey,controllerPublicKey, 32);
@@ -680,14 +685,18 @@ void HKConnection::handlePairSetup(const char *buffer) {
 
 void HKConnection::handleAccessoryRequest(const char *buffer,size_t size){
   char *resultData = 0; unsigned int resultLen = 0;
-  Serial.println("--------BEGIN REQUEST--------");
+  Serial.printf("--------BEGIN REQUEST %d--------\n",socket_client);
   Serial.printf("%s\n",buffer);
-  Serial.println("--------END REQUEST--------");
+  Serial.printf("--------END REQUEST %d--------\n",socket_client);
+
+  Serial.printf("BEFORE handleAccessoryRequest MEM: %d\n",System.freeMemory() );
   handleAccessory(buffer, size, &resultData, &resultLen, this);
+  Serial.printf("AFTER handleAccessoryRequest MEM: %d, responseLen:%d\n",System.freeMemory(),resultLen );
+
   if(resultLen > 0) {
-    Serial.println("--------BEGIN RESPONSE--------");
+    Serial.printf("--------BEGIN RESPONSE %d--------\n",socket_client);
     Serial.printf("%s\n",resultData);
-    Serial.println("--------END RESPONSE--------");
+    Serial.printf("--------END RESPONSE %d--------\n",socket_client);
     writeData((byte*)resultData,resultLen);
   }
   if(resultData){
@@ -695,48 +704,22 @@ void HKConnection::handleAccessoryRequest(const char *buffer,size_t size){
   }
 }
 
-void HKConnection::processNotifiableCharacteristics() {
+void HKConnection::processPostedCharacteristics() {
   for(int i = 0; i < postedCharacteristics.size(); i++) {
     Serial.println("Notifing posted characteristics value.");
-    postedCharacteristics.at(i)->notify(this);
+
+    characteristics *c = postedCharacteristics.at(i);
+
+    char broadcastTemp[1024];
+    memset(broadcastTemp,0,1024);
+    snprintf(broadcastTemp, 1024, "{\"characteristics\":[{\"aid\": %d, \"iid\": %d, \"value\": %s}]}", c->accessory->aid, c->iid, c->value(NULL).c_str());
+    announce(broadcastTemp);
   }
   postedCharacteristics.clear();
-
-  for(int i = 0; i < notifiableCharacteristics.size(); i++) {
-    Serial.println("Notifing characteristics value.");
-    notifiableCharacteristics.at(i)->notify(this);
-  }
 }
 
-void HKConnection::addNotify(characteristics *c){
-  //notifiableCharacteristics.push_back(c);
-  postNotifyOnce(c);
-  lastKeepAliveMs = 0;
-}
 
-void HKConnection::postNotifyOnce(characteristics *c){
-  if(postedCharacteristics.size() > 0){
-    return;
-  }
-  for(int i = 0; i < postedCharacteristics.size(); i++) {
-    if(postedCharacteristics.at(i) == c) {
-      return;
-    }
-  }
+
+void HKConnection::postCharacteristicsValue(characteristics *c){
   postedCharacteristics.push_back(c);
-  lastKeepAliveMs = 0;
-  Serial.println("Post characteristics value.");
-}
-
-void HKConnection::removeNotify(characteristics *c){
-  int i = notifiableCharacteristics.size() - 1;
-  while(i >= 0) {
-    characteristics *item = notifiableCharacteristics.at(i);
-
-    if(item == c) {
-      Serial.println("removeNotify");
-      notifiableCharacteristics.erase(notifiableCharacteristics.begin() + i);
-    }
-    i--;
-  }
 }

@@ -364,10 +364,11 @@ inline string dictionaryWrap(string *key, string *value, unsigned short len) {
 }
 
 void characteristics::notify(HKConnection* conn) {
-    char broadcastTemp[1024];
-    memset(broadcastTemp,0,1024);
-    snprintf(broadcastTemp, 1024, "{\"characteristics\":[{\"aid\": %d, \"iid\": %d, \"value\": %s}]}", accessory->aid, iid, value(NULL).c_str());
-    conn->announce(broadcastTemp);
+  for(int i = 0; i<notifiedConnections.size();i++){
+    if(conn != notifiedConnections.at(i)) {
+      notifiedConnections.at(i)->postCharacteristicsValue(this);
+    }
+  }
 }
 
 string boolCharacteristics::describe(HKConnection *sender) {
@@ -647,9 +648,9 @@ void handleAccessory(const char *request, unsigned int requestLen, char **reply,
                         } else {
                             if (c->notifiable()) {
                                 if (strncmp(value, "1", 1)==0 || strncmp(value, "true", 4) == 0)
-                                    sender->addNotify(c);
+                                    c->addNotifiedConnection(sender);
                                 else
-                                    sender->removeNotify(c);
+                                    c->removeNotifiedConnection(sender);
 
                                 statusCode = 204;
                             } else {
@@ -664,13 +665,8 @@ void handleAccessory(const char *request, unsigned int requestLen, char **reply,
                             if (c->writable()) {
                                 c->setValue(value, sender);
 
-                                //sender->postNotifyOnce(c);
-                                /*char *broadcastTemp = new char[1024];
-                                snprintf(broadcastTemp, 1024, "{\"characteristics\":[{%s}]}", buffer1);
-                                broadcastInfo * info = new broadcastInfo;
-                                info->sender = c;
-                                info->desc = broadcastTemp;
-                                announce(info);*/
+                                c->notify(sender);
+
                                 statusCode = 204;
 
                             } else {
@@ -693,23 +689,34 @@ void handleAccessory(const char *request, unsigned int requestLen, char **reply,
         statusCode = 404;
     }
 
-    //Calculate the length of header
-    char * tmp = new char[256];
-    bzero(tmp, 256);
-    int len = snprintf(tmp, 256, "%s %d OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n\r\n", protocol, statusCode, returnType, replyDataLen);
-    delete [] tmp;
+    if(statusCode == 204) {
+      char status204[] = "HTTP/1.1 204 No Content\r\n\r\n";
+      *reply =  new char[strlen(status204) + 1];
+      (*replyLen) = strlen(status204) + 1;
+      bzero(*reply, (*replyLen));
+      memcpy(*reply,status204,strlen(status204));
 
-    //replyLen should omit the '\0'.
-    (*replyLen) = len+replyDataLen;
-    //reply should add '\0', or the printf is incorrect
-    *reply = new char[*replyLen + 1];
-    bzero(*reply, *replyLen + 1);
-    snprintf(*reply, len + 1, "%s %d OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n\r\n", protocol, statusCode, returnType, replyDataLen);
+    } else {
+      //Calculate the length of header
+      char * tmp = new char[256];
+      bzero(tmp, 256);
+      int len = snprintf(tmp, 256, "%s %d OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n\r\n", protocol, statusCode, returnType, replyDataLen);
+      delete [] tmp;
 
-    if (replyData) {
-        bcopy(replyData, &(*reply)[len], replyDataLen);
-        delete [] replyData;
+      //replyLen should omit the '\0'.
+      (*replyLen) = len+replyDataLen;
+      //reply should add '\0', or the printf is incorrect
+      *reply = new char[*replyLen + 1];
+      bzero(*reply, *replyLen + 1);
+      snprintf(*reply, len + 1, "%s %d OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n\r\n", protocol, statusCode, returnType, replyDataLen);
+
+      if (replyData) {
+          bcopy(replyData, &(*reply)[len], replyDataLen);
+          delete [] replyData;
+      }
     }
+
+
 
     //Serial.printf("Reply: %s\n", *reply);
 

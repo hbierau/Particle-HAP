@@ -56,7 +56,6 @@ private:
   bool isEncrypted = false;
   int lastKeepAliveMs = 0;
 
-  std::vector<characteristics *> notifiableCharacteristics;
   std::vector<characteristics *> postedCharacteristics;
 
   void writeEncryptedData(uint8_t* payload,size_t size);
@@ -66,7 +65,7 @@ private:
   void handlePairSetup(const char *buffer);
   bool handlePairVerify(const char *buffer);
   void handleAccessoryRequest(const char *buffer,size_t size);
-  void processNotifiableCharacteristics();
+  void processPostedCharacteristics();
   int socketRead(uint8_t* buffer,size_t *size);
   int socketWrite(uint8_t* buffer,size_t size);
 public:
@@ -80,14 +79,13 @@ public:
   void writeData(uint8_t* buffer,size_t size);
 
   bool isConnected(){
-    return socket_active_status(socket_client) == SOCKET_STATUS_ACTIVE;
+    return socket_handle_valid(socket_client) && socket_active_status(socket_client) == SOCKET_STATUS_ACTIVE;
   }
   void close(){
-    sock_result_t r = socket_close(socket_client);
-    Serial.printf("socket close %d\n", r);
+    sock_result_t r_shutdown = socket_shutdown(socket_client,SHUT_RDWR);
+    sock_result_t r_close = socket_close(socket_client);
+    Serial.printf("socket_shutdown: %d, socket_close:%d\n", r_shutdown, r_close);
   }
-  void postNotifyOnce(characteristics *c);
-  void addNotify(characteristics *c);
-  void removeNotify(characteristics *c);
+  void postCharacteristicsValue(characteristics *c);
 };
 #endif

@@ -4,6 +4,7 @@
  * Author:
  * Date:
  */
+#define DEBUG_BUILD
 
 #include "homekit/HKServer.h"
 #include "homekit/Accessory.h"
