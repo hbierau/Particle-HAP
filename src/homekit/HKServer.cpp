@@ -1,10 +1,6 @@
 #include "HKServer.h"
 #include "HKConnection.h"
 
-#include "wwd_buffer.h"
-#include "wiced_tcpip.h"
-
-using namespace spark;
 
 HKServer::HKServer() {
   persistor = new HKPersistor();
@@ -32,7 +28,7 @@ void HKServer::setPaired(bool p) {
 TCPClient client;
 HKConnection *connection = NULL;
 void HKServer::handle() {
-  wiced_result_t r;
+
   bonjour.run();
 
   if (!socket_handle_valid(server_socket_handle)) {
@@ -93,6 +89,8 @@ void HKServer::handle() {
       conn->close();
       Serial.println("Client removed.");
       clients.erase(clients.begin() + i);
+
+      free(conn);
     }
 
     i--;
