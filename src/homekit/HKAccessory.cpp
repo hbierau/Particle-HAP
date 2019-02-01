@@ -689,31 +689,25 @@ void handleAccessory(const char *request, unsigned int requestLen, char **reply,
         statusCode = 404;
     }
 
-    if(statusCode == 204) {
-      char status204[] = "HTTP/1.1 204 No Content\r\n\r\n";
-      *reply =  new char[strlen(status204) + 1];
-      (*replyLen) = strlen(status204);
-      bzero(*reply, (*replyLen)+1);
-      memcpy(*reply,status204,strlen(status204));
-    } else {
-      //Calculate the length of header
-      char * tmp = new char[256];
-      bzero(tmp, 256);
-      int len = snprintf(tmp, 256, "%s %d OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n\r\n", protocol, statusCode, returnType, replyDataLen);
-      delete [] tmp;
 
-      //replyLen should omit the '\0'.
-      (*replyLen) = len+replyDataLen;
-      //reply should add '\0', or the printf is incorrect
-      *reply = new char[*replyLen + 1];
-      bzero(*reply, *replyLen + 1);
-      snprintf(*reply, len + 1, "%s %d OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n\r\n", protocol, statusCode, returnType, replyDataLen);
+    //Calculate the length of header
+    char * tmp = new char[256];
+    bzero(tmp, 256);
+    int len = snprintf(tmp, 256, "%s %d OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n\r\n", protocol, statusCode, returnType, replyDataLen);
+    delete [] tmp;
 
-      if (replyData) {
-          bcopy(replyData, &(*reply)[len], replyDataLen);
-          delete [] replyData;
-      }
+    //replyLen should omit the '\0'.
+    (*replyLen) = len+replyDataLen;
+    //reply should add '\0', or the printf is incorrect
+    *reply = new char[*replyLen + 1];
+    bzero(*reply, *replyLen + 1);
+    snprintf(*reply, len + 1, "%s %d OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n\r\n", protocol, statusCode, returnType, replyDataLen);
+
+    if (replyData) {
+        bcopy(replyData, &(*reply)[len], replyDataLen);
+        delete [] replyData;
     }
+
 
 
 

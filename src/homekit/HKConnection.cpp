@@ -20,11 +20,12 @@ HKConnection::HKConnection(HKServer *s,int socket) {
 int HKConnection::socketRead(uint8_t* buffer,size_t *buffer_size){
   int total = 0;
   int result = 0;
+  delay(50);
   socklen_t size = (socklen_t)buffer_size;
   while ((result = socket_receive(socket_client, buffer + total, size - total, 0)) > 0)   {
     total += result;
   }
-  delay(10);
+  delay(50);
   if(!isConnected()) {
     Serial.println("socketRead: read some bytes from closed socket !!!");
     *buffer_size = 0;
@@ -35,7 +36,9 @@ int HKConnection::socketRead(uint8_t* buffer,size_t *buffer_size){
 
 int HKConnection::socketWrite(uint8_t* buffer,size_t size){
   if(isConnected()) {
+    delay(50);
     sock_result_t r = socket_send(socket_client,buffer, size);
+    delay(50);
     Serial.printf("socketWrite result: %lu\n", r);
   }
 }
@@ -151,7 +154,6 @@ void HKConnection::decryptData(uint8_t* payload,size_t *size) {
 
 void HKConnection::readData(uint8_t* buffer,size_t *size) {
   socketRead(buffer,size);
-
   if(*size > 0){
     if(isEncrypted) {
       decryptData(buffer,size);
@@ -210,6 +212,8 @@ void HKConnection::handleConnection() {
   free(inputBuffer);
 
   processPostedCharacteristics();
+
+  //keepAlive();
 }
 
 void HKConnection::announce(char* desc){
@@ -231,13 +235,11 @@ void HKConnection::keepAlive() {
       if(isEncrypted && readsCount > 0) {
         Serial.printf("Keeping alive..\n");
 
-        /*
         char *aliveMsg = new char[32];
         memset(aliveMsg,0,32);
         strncpy(aliveMsg, "{\"characteristics\": []}", 32);
         announce(aliveMsg);
-        free(aliveMsg);*/
-
+        free(aliveMsg);
       }
   }
 }

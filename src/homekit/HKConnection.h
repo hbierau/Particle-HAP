@@ -45,9 +45,6 @@ private:
   size_t responseLength = 128;
   char* response = new char[responseLength];
 
-  char* *secretKey = NULL;
-  unsigned int secretKeyLength = 0;
-
   byte sharedKey[CURVE25519_KEYSIZE];
   byte readKey[CHACHA20_POLY1305_AEAD_KEYSIZE];
   int readsCount = 0;
@@ -79,7 +76,7 @@ public:
   void writeData(uint8_t* buffer,size_t size);
 
   bool isConnected(){
-    return socket_handle_valid(socket_client) && socket_active_status(socket_client) == SOCKET_STATUS_ACTIVE;
+    return true;//socket_handle_valid(socket_client) && socket_active_status(socket_client) == SOCKET_STATUS_ACTIVE;
   }
   void close(){
     sock_result_t r_shutdown = socket_shutdown(socket_client,SHUT_RDWR);

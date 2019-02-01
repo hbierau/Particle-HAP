@@ -10,10 +10,12 @@ HKServer::HKServer() {
 
 void HKServer::setup () {
   persistor->loadRecordStorage();
-
+  delay(15000);
   bonjour.setUDP( &udp );
   bonjour.begin(deviceName);
   setPaired(false);
+
+  server_socket_handle = socket_create_tcp_server(TCP_SERVER_PORT, _nif);
 }
 
 void HKServer::setPaired(bool p) {
@@ -33,17 +35,16 @@ HKConnection *singleConn = NULL;
 void HKServer::handle() {
   mutex.lock();
 
-  if(WiFi.ready()){
-    bonjour.run();
+//  if(WiFi.ready()){
 
-    if (!socket_handle_valid(server_socket_handle)) {
-        server_socket_handle = socket_create_tcp_server(TCP_SERVER_PORT, _nif);
+  /*  if (!socket_handle_valid(server_socket_handle)) {
         if (socket_handle_valid(server_socket_handle)) {
           Serial.printf("Socket server created at port %d\n", TCP_SERVER_PORT);
           Serial.println(WiFi.localIP());
         }
-    }
+    }*/
     if (socket_handle_valid(server_socket_handle)) {
+      bonjour.run();
       int client_socket = socket_accept(server_socket_handle);
 
       if (socket_handle_valid(client_socket))
@@ -53,7 +54,7 @@ void HKServer::handle() {
         clients.push_back(new HKConnection(this,client_socket));
       }
     }
-  }
+
 
 
   /*
