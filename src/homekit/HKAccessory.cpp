@@ -692,10 +692,9 @@ void handleAccessory(const char *request, unsigned int requestLen, char **reply,
     if(statusCode == 204) {
       char status204[] = "HTTP/1.1 204 No Content\r\n\r\n";
       *reply =  new char[strlen(status204) + 1];
-      (*replyLen) = strlen(status204) + 1;
+      (*replyLen) = strlen(status204);
       bzero(*reply, (*replyLen));
       memcpy(*reply,status204,strlen(status204));
-
     } else {
       //Calculate the length of header
       char * tmp = new char[256];
