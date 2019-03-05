@@ -16,7 +16,7 @@
 
 RgbColor c;
 
-int bulbPin = D1;
+int bulbPin = D7;
 
 void LightBulbAccessory::powerTrackable (bool oldValue, bool newValue, HKConnection *sender) {
     RGB.control(true);
