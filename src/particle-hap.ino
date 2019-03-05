@@ -37,6 +37,7 @@ void setup() {
   acc->descriptors.push_back(new WindowsShutterAccessory(14678913,14678916));
   acc->descriptors.push_back(new WindowsShutterAccessory(4102033,4102036));
   acc->descriptors.push_back(new WindowsShutterAccessory(4102034,4102040));
+  acc->descriptors.push_back(new LightBulbAccessory());
   acc->descriptors.push_back(new MotionSensorAccessory());
   //END MYHOME
 
